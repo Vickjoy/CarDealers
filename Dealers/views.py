@@ -7,13 +7,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.db import models
 from .models import User, Vehicle, VehicleImage
+from .permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 from .serializers import (
-    LoginSerializer, UserSerializer,
+    LoginSerializer, UserSerializer, CreateUserSerializer,
     VehicleListSerializer, VehicleDetailSerializer,
     VehicleWriteSerializer, VehicleImageSerializer
 )
 
-from .permissions import IsAdminOrSuperAdmin
 
 
 # ─── HELPER ──────────────────────────────────────────────────────────────────
@@ -301,3 +301,127 @@ def vehicle_image_set_cover(request, image_id):
     image.save()
 
     return Response({'message': 'Cover image updated'}, status=status.HTTP_200_OK)
+
+# ─── USER LIST & CREATE ───────────────────────────────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def user_list_create(request):
+
+    # Only super_admin and admin_staff can view users
+    if not IsAdminOrSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    # GET — list all users
+    if request.method == 'GET':
+        users      = User.objects.all().order_by('role', 'first_name')
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # POST — only super_admin can create users
+    if not IsSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Super admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    serializer = CreateUserSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ─── USER DETAIL, UPDATE, DELETE ─────────────────────────────────────────────
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def user_detail(request, pk):
+
+    # Only admins can access user details
+    if not IsAdminOrSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(pk=pk)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # GET — any admin can view
+    if request.method == 'GET':
+        return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+    # PATCH & DELETE — only super_admin
+    if not IsSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Super admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    # Prevent super admin from modifying their own account here
+    if user == request.user:
+        return Response(
+            {'error': 'You cannot modify your own account from here'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if request.method == 'PATCH':
+        serializer = CreateUserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.method == 'DELETE':
+        user.delete()
+        return Response({'message': 'User deleted'}, status=status.HTTP_204_NO_CONTENT)
+
+
+# ─── TOGGLE USER ACTIVE STATUS ────────────────────────────────────────────────
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def user_toggle_active(request, pk):
+
+    if not IsSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Super admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        user = User.objects.get(pk=pk)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if user == request.user:
+        return Response(
+            {'error': 'You cannot deactivate your own account'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user.is_active = not user.is_active
+    user.save()
+
+    state = 'activated' if user.is_active else 'deactivated'
+    return Response({
+        'message': f'User {state} successfully',
+        'is_active': user.is_active
+    }, status=status.HTTP_200_OK)
+
+# ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    if not IsAdminOrSuperAdmin().has_permission(request, None):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+    total     = Vehicle.objects.count()
+    available = Vehicle.objects.filter(status='available').count()
+    reserved  = Vehicle.objects.filter(status='reserved').count()
+    sold      = Vehicle.objects.filter(status='sold').count()
+
+    recent = Vehicle.objects.prefetch_related('images').order_by('-created_at')[:5]
+    recent_data = VehicleListSerializer(recent, many=True, context={'request': request}).data
+
+    return Response({
+        'stats': {
+            'total':     total,
+            'available': available,
+            'reserved':  reserved,
+            'sold':      sold,
+        },
+        'recent_uploads': recent_data,
+    }, status=status.HTTP_200_OK)
