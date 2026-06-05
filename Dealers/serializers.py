@@ -84,7 +84,9 @@ class VehicleWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Vehicle
         fields = [
+            'id', 
             'make', 'model', 'year', 'price',
             'mileage', 'fuel_type', 'transmission',
             'color', 'engine_size', 'description', 'status'
         ]
+        read_only_fields = ['id']

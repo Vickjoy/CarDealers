@@ -2,24 +2,13 @@ from pathlib import Path
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from datetime import timedelta
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-(981q-uarf_f1^vk#ni_l7cm_@+(o4=+7^+qg*+#(qk!+=+2vb'
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
 ALLOWED_HOSTS = []
-
-
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -27,16 +16,12 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary',
+    'cloudinary_storage',
     'django.contrib.staticfiles',
-
-    # Third party
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
-    'cloudinary',
-    'cloudinary_storage',
-
-    # Our app
     'Dealers',
 ]
 
@@ -70,10 +55,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'Auto.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -85,52 +66,31 @@ DATABASES = {
     }
 }
 
-
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
 
-# Custom user model
+MEDIA_URL = '/media/'
+# ✅ ADDED: MEDIA_ROOT was missing — urls.py references settings.MEDIA_ROOT
+# and would throw AttributeError without it (used only as fallback in dev)
+MEDIA_ROOT = BASE_DIR / 'media'
+
 AUTH_USER_MODEL = 'Dealers.User'
 
-# CORS — allow React dev server
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
 ]
 
-# REST Framework — JWT by default
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -140,23 +100,31 @@ REST_FRAMEWORK = {
     ),
 }
 
-# JWT settings
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
+# ✅ FIXED: Added PREFIX so Cloudinary organises uploads under a vehicles/ folder
 CLOUDINARY_STORAGE = {
     'CLOUD_NAME': 'dfwlaikwn',
     'API_KEY': '414957696934839',
     'API_SECRET': 'QCoAPzG3FAJw_3ddn2Ydwt6Y0nI',
+    'PREFIX': 'vehicles',
 }
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 cloudinary.config(
-    cloud_name = 'dfwlaikwn', 
-    api_key    = '414957696934839',    
-    api_secret = 'QCoAPzG3FAJw_3ddn2Ydwt6Y0nI',  
+    cloud_name = 'dfwlaikwn',
+    api_key    = '414957696934839',
+    api_secret = 'QCoAPzG3FAJw_3ddn2Ydwt6Y0nI',
     secure     = True
 )
